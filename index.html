@@ -1,378 +1,439 @@
 <!DOCTYPE html>
 <html>
-    <head>
-        <meta name="viewport" content="width=device-width, user-scalable=no" />
-        <style>
-            body,
-            html {
-                overflow: hidden;
-                width: 100%;
-
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                flex-direction: column;
-            }
-            #my_Canvas {
-                border: 1px solid black;
-                margin: 0 auto;
-                border-radius: 10px;
-                box-shadow: 0 0 10px 0 rgba(0, 0, 0, 0.5);
-                background-color: #f0f0f0;
-                display: block;
-            }
-        </style>
-        <h1>Informática Gráfica</h1>
-        <h2>Practica 3</h2>
-        <p>Francisco Javier López-Dufour Morales</p>
-    </head>
-
-    <body>
-        <canvas style="min-height: 50%" width="350" height="350" id="my_Canvas"></canvas>
-
-        <script id="vertex-shader" type="x-shader/x-vertex">
-            #version 300 es
-            precision mediump float;
-
-            in vec2 aCoordinates; // Receive coordinates from the buffer
-            out vec2 vCoordinates; // Pass coordinates to fragment shader
-
-            void main(void) {
-              gl_Position = vec4(aCoordinates, 0, 1);
-              vCoordinates = aCoordinates;
-            }
-        </script>
-
-        <script id="fragment-shader" type="x-shader/x-fragment">
-            #version 300 es
-            precision mediump float;
-
-            uniform vec4 uColor; // Receive color from the program
-            in vec2 vCoordinates; // Receive coordinates from vertex shader
-            out vec4 fragColor; // Output color
-
-            void main(void) {
-              fragColor = uColor;
-            }
-        </script>
-
-        <script>
-            var ball = {
-                shape: 'circle',
-                x: -0.05,
-                y: -0.05,
-                width: 0.1,
-                height: 0.1,
-                color: [0, 0, 1, 1],
-                speedX: 0,
-                speedY: 0,
-            };
-
-            var player1 = {
-                shape: 'rectangle',
-                x: -0.9,
-                y: -0.2,
-                width: 0.1,
-                height: 0.4,
-                color: [0.9, 0.2, 0.4, 1],
-                movement: 0,
-                score: 0,
-                scoreHistory: [],
-            };
-
-            function init() {
-                // ============ STEP 1: Creating a canvas=================
-                canvas = document.getElementById('my_Canvas');
-                gl = canvas.getContext('webgl2');
-
-                if (!gl) {
-                    console.error('WebGL no está disponible');
-                }
-
-                //========== STEP 2: Create and compile shaders ==========
-
-                // Create a vertex shader object
-                var vertShader = gl.createShader(gl.VERTEX_SHADER);
-
-                // Attach vertex shader source code
-                var script = document.getElementById('vertex-shader');
-                var shaderString = script.text.trim();
-                gl.shaderSource(vertShader, shaderString);
-
-                // Compile the vertex shader
-                gl.compileShader(vertShader);
-
-                // Create fragment shader object
-                var fragShader = gl.createShader(gl.FRAGMENT_SHADER);
-
-                // Attach fragment shader source code
-                script = document.getElementById('fragment-shader');
-                shaderString = script.text.trim();
-                gl.shaderSource(fragShader, shaderString);
-
-                // Compile the fragment shader
-                gl.compileShader(fragShader);
-
-                // Create a shader program object to store the combined shader program
-                var shaderProgram = gl.createProgram();
-
-                // Attach a vertex shader
-                gl.attachShader(shaderProgram, vertShader);
-
-                // Attach a fragment shader
-                gl.attachShader(shaderProgram, fragShader);
-
-                // Link both programs
-                gl.linkProgram(shaderProgram);
-
-                // Use the combined shader program object
-                gl.useProgram(shaderProgram);
-
-                //======== STEP 3: Create buffer objects and associate shaders ========
-
-                // Create an empty buffer object to store the vertex buffer
-                var vertex_buffer = gl.createBuffer();
-
-                // Bind vertex buffer object
-                gl.bindBuffer(gl.ARRAY_BUFFER, vertex_buffer);
-
-                // Get the attribute location
-                var coordLocation = gl.getAttribLocation(shaderProgram, 'aCoordinates');
-
-                // Point an attribute to the currently bound VBO
-                gl.vertexAttribPointer(coordLocation, 2, gl.FLOAT, false, 0, 0);
-
-                // Enable the attribute
-                gl.enableVertexAttribArray(coordLocation);
-
-                // look up uniform locations
-                colorLocation = gl.getUniformLocation(shaderProgram, 'uColor');
-
-                render();
-            }
-
-            function render() {
-                //========= STEP 4: Create the geometry and draw ===============
-                // Clear the canvas
-                gl.clearColor(0.1, 0.2, 0.3, 1.0);
-
-                // Clear the color buffer bit
-                gl.clear(gl.COLOR_BUFFER_BIT);
-
-                // Set the view port
-                gl.viewport(0, 0, canvas.width, canvas.height);
-
-                drawShapePong(ball.shape, ball);
-                drawShapePong(player1.shape, player1);
-
-                // Bounce ball off the right side of the canvas
-                if (ball.x + ball.width > 1) {
-                    ball.speedX = -ball.speedX;
-                }
-
-                // Reset ball position if it goes out of the left side of the canvas
-                if (ball.x < -0.95) {
-                    resetBall();
-                    updateScoreHistory();
-                    resetPlayer();
-                }
-
-                // Bounce ball off the top and bottom of the canvas
-                if (ball.y + ball.height > 1 || ball.y < -1) {
-                    ball.speedY = -ball.speedY;
-                }
-
-                // Stop the players if they reach the edges of the canvas
-                if (player1.y + player1.height > 1 && player1.movement > 0) {
-                    player1.movement = 0;
-                }
-                if (player1.y < -1 && player1.movement < 0) {
-                    player1.movement = 0;
-                }
-
-                // If the ball collides with the player, change its direction
-                if (
-                    ball.x < -0.8 && // ball is on the left side of the canvas with a small margin
-                    ball.x + ball.width > player1.x &&
-                    ball.x < player1.x + player1.width &&
-                    ball.y + ball.height > player1.y &&
-                    ball.y < player1.y + player1.height
-                ) {
-                    ball.speedX = -ball.speedX;
-                    updateScore();
-                    updateSpeed();
-                }
-
-                // animate ball
-                ball.x += ball.speedX;
-                ball.y += ball.speedY;
-
-                // Update player positions
-                player1.y += player1.movement;
-
-                // start animation loop
-                window.requestAnimationFrame(render);
-            }
-
-            window.onload = init;
-
-            function drawShape(shape, x, y, size, color) {
-                if (shape === 'rectangle') {
-                    drawRectangle(x, y, size[0], size[1], color);
-                } else if (shape === 'triangle') {
-                    drawTriangle(x, y, size[0], color);
-                }
-            }
-
-            function drawShapePong(shape, figure) {
-                if (shape === 'rectangle') {
-                    drawRectangle(figure.x, figure.y, figure.width, figure.height, figure.color);
-                } else if (shape === 'circle') {
-                    drawCircle(figure.x, figure.y, figure.width, figure.height, figure.color);
-                }
-            }
-
-            function drawRectangle(x, y, width, height, color) {
-                var x1 = x;
-                var x2 = x + width;
-                var y1 = y;
-                var y2 = y + height;
-                gl.bufferData(
-                    gl.ARRAY_BUFFER,
-                    new Float32Array([x1, y1, x2, y1, x1, y2, x1, y2, x2, y1, x2, y2]),
-                    gl.STATIC_DRAW,
-                );
-                gl.uniform4fv(colorLocation, color);
-                gl.drawArrays(gl.TRIANGLES, 0, 6);
-            }
-
-            function drawTriangle(x, y, size, color) {
-                gl.bufferData(
-                    gl.ARRAY_BUFFER,
-                    new Float32Array([x, y, x + size, y, x, y + size]),
-                    gl.STATIC_DRAW,
-                );
-                gl.uniform4fv(colorLocation, color);
-                gl.drawArrays(gl.TRIANGLES, 0, 3);
-            }
-
-            function drawCircle(x, y, width, height, color) {
-                var x1 = x;
-                var x2 = x + width;
-                var y1 = y;
-                var y2 = y + height;
-
-                gl.bufferData(
-                    gl.ARRAY_BUFFER,
-                    new Float32Array([x1, y1, x2, y1, x1, y2, x1, y2, x2, y1, x2, y2]),
-                    gl.STATIC_DRAW,
-                );
-                gl.uniform4fv(colorLocation, color);
-                gl.drawArrays(gl.TRIANGLES, 0, 6);
-            }
-
-            function setColor(color) {
-                currentColor = color;
-            }
-
-            function setDirection(newDirection) {
-                direction = newDirection;
-            }
-
-            // Process key events by updating global orientation values
-            function onKeyDown(key) {
-                switch (key.keyCode) {
-                    // up arrow
-                    case 38: {
-                        player1.movement = 0.02;
-                        break;
-                    }
-                    // down arrow
-                    case 40: {
-                        player1.movement = -0.02;
-                        break;
-                    }
-                    // space
-                    case 32: {
-                        start();
-                        break;
-                    }
-                }
-            }
-
-            function onKeyUp(key) {
-                player1.movement = 0;
-            }
-
-            // eventos en el móvil
-            function onTouchStart(e) {
-                touchobj = e.changedTouches[0]; // reference first touch
-                prevTouchY = parseInt(touchobj.clientY);
-            }
-
-            function onTouchMove(e) {
-                touchobj = e.changedTouches[0]; // reference first touch
-                touchY = parseInt(touchobj.clientY);
-                difY = touchY - prevTouchY;
-                player1.movement = -difY * 0.0005;
-                prevTouchY = touchY;
-            }
-
-            function onTouchEnd(e) {
-                player1.movement = 0;
-            }
-
-            // Keyboard controls
-            window.addEventListener('keydown', onKeyDown);
-            window.addEventListener('keyup', onKeyUp);
-
-            // Mobile controls
-            var canvas = document.getElementById('my_Canvas');
-            canvas.addEventListener('touchmove', onTouchMove, false);
-            canvas.addEventListener('touchstart', onTouchStart, false);
-            canvas.addEventListener('touchend', onTouchEnd, false);
-
-            document.getElementById('start').addEventListener('click', start);
-
-            function start() {
-                resetBall();
-                resetPlayer();
-                updateSpeed();
-            }
-
-            function updateScore() {
-                player1.score += 1;
-                document.querySelector('.score p').textContent = `Puntuación: ${player1.score}`;
-            }
-
-            function updateSpeed() {
-                ball.speedX = 0.02 + player1.score * 0.002;
-                ball.speedY = Math.random() * 0.04 - 0.02; // Random value between -0.02 and 0.02
-            }
-
-            function resetPlayer() {
-                player1.y = 0 - player1.height / 2;
-                player1.movement = 0;
-                player1.score = 0;
-            }
-
-            function resetBall() {
-                ball.speedX = 0;
-                ball.speedY = 0;
-
-                ball.x = 0 - ball.width / 2;
-                ball.y = 0 - ball.height / 2;
-            }
-
-            function updateScoreHistory() {
-                var scoreHistoryList = document.getElementById('score-history-list');
-                var listItem = document.createElement('li');
-
-                listItem.textContent = `Juego ${player1.scoreHistory.length + 1}: ${player1.score}`;
-                scoreHistoryList.insertBefore(listItem, scoreHistoryList.firstChild);
-
-                player1.scoreHistory.push(player1.score);
-            }
-        </script>
-    </body>
+	<head>
+		<meta name="viewport" content="width=device-width, user-scalable=no" />
+		<style>
+			body,
+			html {
+				overflow: hidden;
+				width: 100%;
+
+				display: flex;
+				justify-content: center;
+				align-items: center;
+				gap: 0;
+				flex-direction: column;
+			}
+			h1 {
+				margin: 0;
+				font-size: 2em;
+				color: #333;
+				text-align: center;
+			}
+			h2 {
+				margin: 0;
+				font-size: 1.5em;
+				color: #666;
+				text-align: center;
+			}
+			p {
+				margin: 0;
+				font-size: 1.2em;
+				color: #999;
+				text-align: center;
+			}
+			#my_Canvas {
+				border: 1px solid black;
+				margin: 30px auto;
+				border-radius: 10px;
+				box-shadow: 0 0 10px 0 rgba(0, 0, 0, 0.5);
+				background-color: #f0f0f0;
+				display: block;
+			}
+		</style>
+		<h1>Informática Gráfica</h1>
+		<h2>Practica 3</h2>
+		<p>Francisco Javier López-Dufour Morales</p>
+	</head>
+
+	<body>
+		<canvas
+			style="min-height: 50%"
+			width="350"
+			height="350"
+			id="my_Canvas"
+		></canvas>
+		<script type="text/javascript" src="dat.gui.min.js"></script>
+		<script type="text/javascript" src="gl-matrix-min.js"></script>
+
+		<script id="vertex-shader" type="x-shader/x-vertex">
+			#version 300 es
+			precision mediump float;
+
+			in vec2 aCoordinates; // Receive coordinates from the buffer
+			out vec2 vCoordinates; // Pass coordinates to fragment shader
+			uniform mat4 uModelMatrix;
+
+			void main(void) {
+			  gl_Position = uModelMatrix * vec4(aCoordinates, 0.0, 1.0);
+			  vCoordinates = aCoordinates;
+			}
+		</script>
+
+		<script id="fragment-shader" type="x-shader/x-fragment">
+			#version 300 es
+			precision mediump float;
+
+			uniform vec4 uColor; // Receive color from the program
+			in vec2 vCoordinates; // Receive coordinates from vertex shader
+			out vec4 fragColor; // Output color
+
+			void main(void) {
+			  fragColor = uColor;
+			}
+		</script>
+
+		<script>
+			const { vec2, vec3, mat3, mat4 } = glMatrix;
+
+			var settings = {
+				translateX: 0.0,
+				translateY: 0.0,
+				rotateZ: 0.0,
+				rotateX: 0.0,
+				rotateY: 0.0,
+				zoom: 0.6,
+			};
+
+			var sun = {
+				x: 0,
+				y: 0,
+				width: 0.2,
+				height: 0.2,
+				color: [1, 1, 0, 1],
+			};
+
+			var earth = {
+				x: 0.8,
+				y: 0,
+				width: 0.1,
+				height: 0.1,
+				color: [0.2, 0.2, 1, 1],
+				angle: 0,
+				orbitRadius: 4,
+			};
+
+			var mercury = {
+				x: 0.4,
+				y: 0,
+				width: 0.1,
+				height: 0.1,
+				color: [1, 0, 0, 1],
+				angle: 0,
+				orbitRadius: 2,
+			};
+
+			var jupiter = {
+				x: 1.6,
+				y: 0,
+				width: 0.25,
+				height: 0.25,
+				color: [1, 0.5, 0, 1],
+				angle: 0,
+				orbitRadius: 8,
+			};
+
+			var moon = {
+				x: 0.15,
+				y: 0,
+				width: 0.04,
+				height: 0.04,
+				color: [1, 1, 1, 1],
+				angle: 0,
+				orbitRadius: 0.15,
+			};
+
+			var matrixStack = [];
+
+			// GUI
+			var gui = new dat.GUI();
+			gui.add(settings, 'translateX', -1.0, 1.0, 0.01);
+			gui.add(settings, 'translateY', -1.0, 1.0, 0.01);
+			gui.add(settings, 'rotateZ', -180, 180);
+			gui.add(settings, 'rotateX', -180, 180);
+			gui.add(settings, 'rotateY', -180, 180);
+			gui.add(settings, 'zoom', 0.1, 2.0, 0.01);
+
+			var modelMatrixLoc;
+
+			function init() {
+				// ============ STEP 1: Creating a canvas=================
+				canvas = document.getElementById('my_Canvas');
+				gl = canvas.getContext('webgl2');
+
+				if (!gl) {
+					console.error('WebGL no está disponible');
+				}
+
+				//========== STEP 2: Create and compile shaders ==========
+
+				// Create a vertex shader object
+				var vertShader = gl.createShader(gl.VERTEX_SHADER);
+
+				// Attach vertex shader source code
+				var script = document.getElementById('vertex-shader');
+				var shaderString = script.text.trim();
+				gl.shaderSource(vertShader, shaderString);
+
+				// Compile the vertex shader
+				gl.compileShader(vertShader);
+
+				// Create fragment shader object
+				var fragShader = gl.createShader(gl.FRAGMENT_SHADER);
+
+				// Attach fragment shader source code
+				script = document.getElementById('fragment-shader');
+				shaderString = script.text.trim();
+				gl.shaderSource(fragShader, shaderString);
+
+				// Compile the fragment shader
+				gl.compileShader(fragShader);
+
+				// Create a shader program object to store the combined shader program
+				var shaderProgram = gl.createProgram();
+
+				// Attach a vertex shader
+				gl.attachShader(shaderProgram, vertShader);
+
+				// Attach a fragment shader
+				gl.attachShader(shaderProgram, fragShader);
+
+				// Link both programs
+				gl.linkProgram(shaderProgram);
+
+				// Use the combined shader program object
+				gl.useProgram(shaderProgram);
+
+				//======== STEP 3: Create buffer objects and associate shaders ========
+
+				// Create an empty buffer object to store the vertex buffer
+				var vertex_buffer = gl.createBuffer();
+
+				// Bind vertex buffer object
+				gl.bindBuffer(gl.ARRAY_BUFFER, vertex_buffer);
+
+				// Get the attribute location
+				var coordLocation = gl.getAttribLocation(shaderProgram, 'aCoordinates');
+
+				// Point an attribute to the currently bound VBO
+				gl.vertexAttribPointer(coordLocation, 2, gl.FLOAT, false, 0, 0);
+
+				// Enable the attribute
+				gl.enableVertexAttribArray(coordLocation);
+
+				// look up uniform locations for color
+				colorLocation = gl.getUniformLocation(shaderProgram, 'uColor');
+
+				// look up uniform locations for translation
+				modelMatrixLoc = gl.getUniformLocation(shaderProgram, 'uModelMatrix');
+
+				render();
+			}
+
+			function render() {
+				//========= STEP 4: Create the geometry and draw ===============
+				// Clear the canvas
+				gl.clearColor(0.1, 0.2, 0.3, 1.0);
+
+				// Clear the color buffer bit
+				gl.clear(gl.COLOR_BUFFER_BIT);
+
+				// Set the view port
+				gl.viewport(0, 0, canvas.width, canvas.height);
+
+				// Set the model Matrix.
+				modelMatrix = mat4.create();
+
+				// Identity matrix
+				mat4.identity(modelMatrix);
+
+				// Translate the model matrix by applying the translation matrix
+				mat4.translate(modelMatrix, modelMatrix, [
+					settings.translateX, // x
+					settings.translateY, // y
+					0,
+				]);
+
+				// Rotate the model matrix by applying the rotation matrix after the translation matrix
+				mat4.rotateX(
+					modelMatrix,
+					modelMatrix,
+					(settings.rotateX / 180) * Math.PI
+				);
+
+				mat4.rotateY(
+					modelMatrix,
+					modelMatrix,
+					(settings.rotateY / 180) * Math.PI
+				);
+
+				mat4.rotateZ(
+					modelMatrix,
+					modelMatrix,
+					(settings.rotateZ / 180) * Math.PI
+				);
+
+				// Scale the model matrix
+				mat4.scale(modelMatrix, modelMatrix, [settings.zoom, settings.zoom, 1]);
+				// Set the model matrix
+				gl.uniformMatrix4fv(modelMatrixLoc, false, modelMatrix);
+
+				// Draw the sun
+				glPushMatrix();
+				mat4.scale(modelMatrix, modelMatrix, [sun.width, sun.height, 1]);
+				gl.uniformMatrix4fv(modelMatrixLoc, false, modelMatrix);
+				gl.uniform4fv(colorLocation, sun.color);
+				drawCircle();
+				glPopMatrix();
+
+				// Draw the earth
+				glPushMatrix();
+				mat4.rotateZ(modelMatrix, modelMatrix, earth.angle);
+				mat4.translate(modelMatrix, modelMatrix, [earth.x, earth.y, 0]);
+				mat4.scale(modelMatrix, modelMatrix, [earth.width, earth.height, 1]);
+				gl.uniformMatrix4fv(modelMatrixLoc, false, modelMatrix);
+				gl.uniform4fv(colorLocation, earth.color);
+				drawCircle();
+				glPopMatrix();
+
+				// Draw the earth's orbit
+				glPushMatrix();
+				mat4.scale(modelMatrix, modelMatrix, [sun.width, sun.height, 1]);
+				gl.uniformMatrix4fv(modelMatrixLoc, false, modelMatrix);
+				gl.uniform4fv(colorLocation, [1, 1, 1, 1]);
+				drawOrbit(earth.orbitRadius);
+				glPopMatrix();
+
+				// Draw the moon
+				glPushMatrix();
+				mat4.rotateZ(modelMatrix, modelMatrix, moon.angle);
+				mat4.translate(modelMatrix, modelMatrix, [earth.x, earth.y, 0]);
+				mat4.rotateZ(modelMatrix, modelMatrix, moon.angle);
+				mat4.translate(modelMatrix, modelMatrix, [moon.x, moon.y, 0]);
+				mat4.scale(modelMatrix, modelMatrix, [moon.width, moon.height, 1]);
+				gl.uniformMatrix4fv(modelMatrixLoc, false, modelMatrix);
+				gl.uniform4fv(colorLocation, moon.color);
+				drawCircle();
+				glPopMatrix();
+
+				// Draw the moon's orbit
+				glPushMatrix();
+				mat4.rotateZ(modelMatrix, modelMatrix, earth.angle);
+				mat4.translate(modelMatrix, modelMatrix, [earth.x, earth.y, 0]);
+				gl.uniformMatrix4fv(modelMatrixLoc, false, modelMatrix);
+				gl.uniform4fv(colorLocation, [1, 1, 1, 1]); 
+				drawOrbit(moon.orbitRadius);
+				glPopMatrix();
+
+				// Draw the mercury
+				glPushMatrix();
+				mat4.rotateX(modelMatrix, modelMatrix, Math.PI / 4); // Rotate the orbit around the X axis
+				mat4.rotateZ(modelMatrix, modelMatrix, mercury.angle);
+				mat4.translate(modelMatrix, modelMatrix, [mercury.x, mercury.y, 0]);
+				mat4.scale(modelMatrix, modelMatrix, [mercury.width, mercury.height, 1]);
+				gl.uniformMatrix4fv(modelMatrixLoc, false, modelMatrix);
+				gl.uniform4fv(colorLocation, mercury.color);
+				drawCircle();
+				glPopMatrix();
+
+				// Draw the mercury's orbit
+				glPushMatrix();
+				mat4.rotateX(modelMatrix, modelMatrix, Math.PI / 4); // Rotate the orbit around the X axis
+				mat4.scale(modelMatrix, modelMatrix, [sun.width, sun.height, 1]);
+				gl.uniformMatrix4fv(modelMatrixLoc, false, modelMatrix);
+				gl.uniform4fv(colorLocation, [1, 1, 1, 1]);
+				drawOrbit(mercury.orbitRadius);
+				glPopMatrix();
+
+				// Draw the jupiter
+				glPushMatrix();
+				mat4.rotateX(modelMatrix, modelMatrix, Math.PI / 6); // Rotate the orbit around the X axis
+				mat4.rotateY(modelMatrix, modelMatrix, Math.PI / 8); // Rotate the orbit around the Y axis
+				mat4.rotateZ(modelMatrix, modelMatrix, jupiter.angle);
+				mat4.translate(modelMatrix, modelMatrix, [jupiter.x, jupiter.y, 0]);
+				mat4.scale(modelMatrix, modelMatrix, [jupiter.width, jupiter.height, 1]);
+				gl.uniformMatrix4fv(modelMatrixLoc, false, modelMatrix);
+				gl.uniform4fv(colorLocation, jupiter.color);
+				drawCircle();
+				glPopMatrix();
+
+				// Draw the jupiter's orbit
+				glPushMatrix();
+				mat4.rotateX(modelMatrix, modelMatrix, Math.PI / 6); // Rotate the orbit around the X axis
+				mat4.rotateY(modelMatrix, modelMatrix, Math.PI / 8); // Rotate the orbit around the Y axis
+				mat4.scale(modelMatrix, modelMatrix, [sun.width, sun.height, 1]);
+				gl.uniformMatrix4fv(modelMatrixLoc, false, modelMatrix);
+				gl.uniform4fv(colorLocation, [1, 1, 1, 1]);
+				drawOrbit(jupiter.orbitRadius);
+				glPopMatrix();
+
+				// Update the angles
+				earth.angle += 0.01;
+				moon.angle += 0.01;
+				mercury.angle += 0.01;
+				jupiter.angle += 0.01;
+
+				// start animation loop
+				window.requestAnimationFrame(render);
+			}
+
+			window.onload = init;
+
+			function drawSquare() {
+				v = new Float32Array([
+					-0.5, 0.5, 0.5, 0.5, -0.5, -0.5, -0.5, -0.5, 0.5, 0.5, 0.5, -0.5,
+				]); // Pass the vertex data to the buffer
+				gl.bufferData(gl.ARRAY_BUFFER, v, gl.STATIC_DRAW);
+				gl.drawArrays(gl.TRIANGLES, 0, 6);
+			}
+
+			function drawCircle() {
+				const vertices = [];
+				for (let i = 0; i < 360; i++) {
+					const angle = (i * Math.PI) / 180;
+					const x = Math.cos(angle) * 0.5;
+					const y = Math.sin(angle) * 0.5;
+					vertices.push(x, y);
+				}
+				gl.bufferData(
+					gl.ARRAY_BUFFER,
+					new Float32Array(vertices),
+					gl.STATIC_DRAW
+				);
+				gl.drawArrays(gl.TRIANGLE_FAN, 0, 360);
+			}
+
+			function drawOrbit(radius) {
+				const vertices = [];
+				for (let i = 0; i < 360; i++) {
+					const angle = (i * Math.PI) / 180;
+					const x = Math.cos(angle) * radius;
+					const y = Math.sin(angle) * radius;
+					vertices.push(x, y);
+				}
+				gl.bufferData(
+					gl.ARRAY_BUFFER,
+					new Float32Array(vertices),
+					gl.STATIC_DRAW
+				);
+				gl.drawArrays(gl.LINE_LOOP, 0, 360); 
+			}
+
+			function glPushMatrix() {
+				const matrix = mat4.create();
+				mat4.copy(matrix, modelMatrix);
+				matrixStack.push(matrix);
+			}
+
+			function glPopMatrix() {
+				modelMatrix = matrixStack.pop();
+			}
+
+			// Apply CSS styles to locate in the bottom side of the window
+			var guiContainer = document.querySelector('.dg.main');
+			guiContainer.style.position = 'fixed';
+			guiContainer.style.bottom = '0';
+			guiContainer.style.left = '0';
+		</script>
+	</body>
 </html>
