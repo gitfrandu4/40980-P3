@@ -1,6 +1,6 @@
 # Practica 3: Transformaciones en WebGL
 
-Live en Glitch: [live]([https://ig-practica-3-fjldm.glitch.me/)
+Live en Glitch: [live](https://ig-practica-3-fjldm.glitch.me)
 
 ## Descripción
 Esta práctica se centra en la implementación de transformaciones en WebGL para crear un sistema solar interactivo. El proyecto utiliza WebGL2 para renderizar objetos 2D y aplicar diversas transformaciones como traslación, rotación y escalado.
